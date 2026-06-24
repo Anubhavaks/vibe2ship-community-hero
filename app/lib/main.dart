@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 import 'api_service.dart';
 
 void main() {
@@ -21,7 +23,10 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
   bool _isAnalyzing = false;
   Map<String, dynamic>? _analysisResult;
   
-  final _locationController = TextEditingController(text: "Near the broken water tank, Sector 4 main market");
+  // 1. Replaced GoogleMapController with the free MapController
+  final MapController _mapController = MapController();
+  
+  final _locationController = TextEditingController(text: "Near the main entry square, Sector 4");
   final CivicApiService _apiService = CivicApiService();
   final ImagePicker _picker = ImagePicker();
 
@@ -30,7 +35,7 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
     if (pickedFile != null) {
       setState(() {
         _selectedImage = File(pickedFile.path);
-        _analysisResult = null; // Clear old results
+        _analysisResult = null;
       });
     }
   }
@@ -49,13 +54,21 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
       _analysisResult = result;
       _isAnalyzing = false;
     });
+
+    // 2. Updated the camera animation logic for OpenStreetMap
+    if (result != null && result['gamified_quest'] != null) {
+      double lat = result['gamified_quest']['latitude'] ?? 28.9846;
+      double lng = result['gamified_quest']['longitude'] ?? 77.7059;
+      // Tell the map to jump to the new coordinates
+      _mapController.move(LatLng(lat, lng), 15.5);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🛡️ CivicAgent Core'),
+        title: const Text('🛡️ CivicAgent Core Map'),
         backgroundColor: Colors.teal[700],
         foregroundColor: Colors.white,
       ),
@@ -64,11 +77,11 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // IMAGE DISPLAY CARD
+            // IMAGE VIEW
             Card(
               elevation: 4,
               child: Container(
-                height: 220,
+                height: 180,
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(8),
@@ -81,16 +94,15 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                     : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.add_a_photo, size: 50, color: Colors.grey[600]),
+                          Icon(Icons.add_a_photo, size: 40, color: Colors.grey[600]),
                           const SizedBox(height: 10),
-                          const Text("Upload Infrastructure Damage Evidence", style: TextStyle(color: Colors.grey)),
+                          const Text("Upload Infrastructure Incident Evidence", style: TextStyle(color: Colors.grey)),
                         ],
                       ),
               ),
             ),
             const SizedBox(height: 12),
             
-            // CAMERA / GALLERY BUTTONS
             Row(
               children: [
                 Expanded(
@@ -112,18 +124,16 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
             ),
             const SizedBox(height: 16),
 
-            // LOCATION STRING FIELD
             TextField(
               controller: _locationController,
               decoration: const InputDecoration(
-                labelText: 'Hyperlocal Context / Location Input',
+                labelText: 'Hyperlocal Description',
                 border: OutlineInputBorder(),
                 prefixIcon: Icon(Icons.location_on, color: Colors.teal),
               ),
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // PIPELINE SUBMIT BUTTON
             ElevatedButton(
               onPressed: (_selectedImage == null || _isAnalyzing) ? null : _analyzeWithCivicAgent,
               style: ElevatedButton.styleFrom(
@@ -136,64 +146,102 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                   : const Text("Deploy Autonomous AI Evaluation", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
 
-            // PARSED AGENTIC RESPONSE PRESENTATION
             if (_analysisResult != null) ...[
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
               const Divider(thickness: 2),
-              const SizedBox(height: 8),
               
-              // SEVERITY METRIC
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Chip(
-                    label: Text(_analysisResult!['category'] ?? "General Hazard"),
+                    label: Text(_analysisResult!['category'] ?? "Civic Hazard"),
                     backgroundColor: Colors.teal[50],
                   ),
                   Text(
                     "Severity: ${_analysisResult!['severity_score']}/10",
                     style: TextStyle(
-                      fontSize: 20, 
+                      fontSize: 18, 
                       fontWeight: FontWeight.bold, 
                       color: (_analysisResult!['severity_score'] ?? 5) >= 7 ? Colors.red[700] : Colors.orange[700]
                     ),
                   )
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
 
-              // PUBLIC TRACKER DETAILS
               Text(
                 _analysisResult!['public_tracker']['title'] ?? "",
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 4),
               Text(
                 _analysisResult!['public_tracker']['rationale'] ?? "",
-                style: TextStyle(color: Colors.grey[700], height: 1.3),
+                style: TextStyle(color: Colors.grey[700], fontSize: 13),
               ),
               const SizedBox(height: 16),
 
-              // PREDICTIVE INSIGHT SIMULATION (Hits Agentic Criteria hard)
-              Card(
-                color: Colors.red[50],
-                child: Padding(
-                  padding: const EdgeInsets.all(12.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+              // 3. The fully updated OpenStreetMap widget
+              Text(
+                "🗺️ ${_analysisResult!['gamified_quest']['quest_title'] ?? 'Verification Quest Location'}",
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.indigo),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                height: 250,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.indigo[100]!),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(11),
+                  child: FlutterMap(
+                    mapController: _mapController, // Attach the controller
+                    options: MapOptions(
+                      initialCenter: LatLng(
+                        _analysisResult!['gamified_quest']['latitude'] ?? 28.9846,
+                        _analysisResult!['gamified_quest']['longitude'] ?? 77.7059,
+                      ),
+                      initialZoom: 15.0,
+                    ),
                     children: [
-                      Text("🔮 AI Predictive Deterioration Timeline", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[900])),
-                      const SizedBox(height: 8),
-                      Text("• 48h: ${_analysisResult!['predictive_insight']['timeline_48h']}"),
-                      const SizedBox(height: 6),
-                      Text("• 7 Days: ${_analysisResult!['predictive_insight']['timeline_7_days']}"),
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.vibe2ship.communityhero', // Good practice for OSM
+                      ),
+                      CircleLayer(
+                        circles: [
+                          CircleMarker(
+                            point: LatLng(
+                              _analysisResult!['gamified_quest']['latitude'] ?? 28.9846,
+                              _analysisResult!['gamified_quest']['longitude'] ?? 77.7059,
+                            ),
+                            color: Colors.indigo.withOpacity(0.2),
+                            borderStrokeWidth: 2,
+                            borderColor: Colors.indigo,
+                            useRadiusInMeter: true,
+                            radius: (_analysisResult!['gamified_quest']['radius_meters'] as num).toDouble(),
+                          ),
+                        ],
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: LatLng(
+                              _analysisResult!['gamified_quest']['latitude'] ?? 28.9846,
+                              _analysisResult!['gamified_quest']['longitude'] ?? 77.7059,
+                            ),
+                            width: 40,
+                            height: 40,
+                            child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                          ),
+                        ],
+                      ),
                     ],
                   ),
                 ),
               ),
               const SizedBox(height: 12),
 
-              // GAMIFIED CROWDSOURCING QUEST
               Card(
                 color: Colors.amber[50],
                 child: Padding(
@@ -201,17 +249,9 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(_analysisResult!['gamified_quest']['quest_title'] ?? "Verification Quest Active", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.amber[900])),
-                      const SizedBox(height: 6),
-                      Text("Objective: ${_analysisResult!['gamified_quest']['objective']}"),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text("Status: Available Nearby", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                          Text("+${_analysisResult!['gamified_quest']['reward_points']} pts", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
-                        ],
-                      )
+                      Text("Task: ${_analysisResult!['gamified_quest']['objective']}", style: const TextStyle(fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 4),
+                      Text("Reward Allocation: +${_analysisResult!['gamified_quest']['reward_points']} Points", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
                     ],
                   ),
                 ),

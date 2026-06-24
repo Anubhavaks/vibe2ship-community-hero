@@ -26,6 +26,9 @@ class GamifiedQuest(BaseModel):
     quest_title: str = Field(description="An action-packed title for the citizen verification quest.")
     objective: str = Field(description="Clear instruction on what a nearby citizen needs to check or photograph.")
     reward_points: int = Field(description="Points awarded based on risk severity (between 50 and 200).")
+    latitude: float = Field(description="An estimated latitude midpoint matching the reported location context (e.g., around 28.98 for Meerut area context if applicable, or typical city coordinates).")
+    longitude: float = Field(description="An estimated longitude midpoint matching the reported location context.")
+    radius_meters: int = Field(description="Geofence radius in meters around the coordinates where the quest is valid, between 100 and 500.")
 
 class CivicAgentAnalysis(BaseModel):
     category: str = Field(description="Civic category (e.g., Potholes, Water Leakages, Damaged Streetlights, Waste Management).")
