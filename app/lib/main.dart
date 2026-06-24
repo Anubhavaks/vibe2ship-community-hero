@@ -23,9 +23,11 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
   bool _isAnalyzing = false;
   Map<String, dynamic>? _analysisResult;
   
-  // 1. Replaced GoogleMapController with the free MapController
-  final MapController _mapController = MapController();
+  // NEW: State variables for the gamification loop
+  bool _isQuestVerified = false;
+  bool _isVerifyingQuest = false;
   
+  final MapController _mapController = MapController();
   final _locationController = TextEditingController(text: "Near the main entry square, Sector 4");
   final CivicApiService _apiService = CivicApiService();
   final ImagePicker _picker = ImagePicker();
@@ -36,6 +38,7 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
       setState(() {
         _selectedImage = File(pickedFile.path);
         _analysisResult = null;
+        _isQuestVerified = false; // Reset verification state on new image
       });
     }
   }
@@ -55,13 +58,87 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
       _isAnalyzing = false;
     });
 
-    // 2. Updated the camera animation logic for OpenStreetMap
     if (result != null && result['gamified_quest'] != null) {
       double lat = result['gamified_quest']['latitude'] ?? 28.9846;
       double lng = result['gamified_quest']['longitude'] ?? 77.7059;
-      // Tell the map to jump to the new coordinates
       _mapController.move(LatLng(lat, lng), 15.5);
     }
+  }
+
+  // NEW: Method to simulate a citizen verifying the quest
+  Future<void> _simulateQuestVerification() async {
+    final pickedFile = await _picker.pickImage(source: ImageSource.camera);
+    
+    if (pickedFile != null) {
+      setState(() => _isVerifyingQuest = true);
+      
+      // Simulate AI cross-referencing the new photo (looks great in a demo)
+      await Future.delayed(const Duration(seconds: 2));
+
+      setState(() {
+        _isQuestVerified = true;
+        _isVerifyingQuest = false;
+      });
+
+      _showRewardDialog();
+    }
+  }
+
+  // NEW: The Wallet Credit Reward Popup
+  void _showRewardDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
+            children: [
+              Icon(Icons.stars, color: Colors.amber, size: 28),
+              SizedBox(width: 8),
+              Text("Quest Verified!"),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Telemetry confirmed via secondary geotagged photo submission.",
+                style: TextStyle(color: Colors.grey[800]),
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.green[50],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      "Wallet Credit Issued:",
+                      style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green[900]),
+                    ),
+                    Text(
+                      "+${_analysisResult!['gamified_quest']['reward_points']} PTS",
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text("Claim Rewards", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.teal)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -77,7 +154,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // IMAGE VIEW
             Card(
               elevation: 4,
               child: Container(
@@ -180,7 +256,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
               ),
               const SizedBox(height: 16),
 
-              // 3. The fully updated OpenStreetMap widget
               Text(
                 "🗺️ ${_analysisResult!['gamified_quest']['quest_title'] ?? 'Verification Quest Location'}",
                 style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.indigo),
@@ -195,7 +270,7 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(11),
                   child: FlutterMap(
-                    mapController: _mapController, // Attach the controller
+                    mapController: _mapController,
                     options: MapOptions(
                       initialCenter: LatLng(
                         _analysisResult!['gamified_quest']['latitude'] ?? 28.9846,
@@ -206,7 +281,7 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                     children: [
                       TileLayer(
                         urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.vibe2ship.communityhero', // Good practice for OSM
+                        userAgentPackageName: 'com.vibe2ship.communityhero',
                       ),
                       CircleLayer(
                         circles: [
@@ -215,9 +290,10 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                               _analysisResult!['gamified_quest']['latitude'] ?? 28.9846,
                               _analysisResult!['gamified_quest']['longitude'] ?? 77.7059,
                             ),
-                            color: Colors.indigo.withOpacity(0.2),
+                            // NEW: Map circle turns green when verified
+                            color: _isQuestVerified ? Colors.green.withOpacity(0.2) : Colors.indigo.withOpacity(0.2),
                             borderStrokeWidth: 2,
-                            borderColor: Colors.indigo,
+                            borderColor: _isQuestVerified ? Colors.green : Colors.indigo,
                             useRadiusInMeter: true,
                             radius: (_analysisResult!['gamified_quest']['radius_meters'] as num).toDouble(),
                           ),
@@ -232,7 +308,8 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                             ),
                             width: 40,
                             height: 40,
-                            child: const Icon(Icons.location_on, color: Colors.red, size: 40),
+                            // NEW: Map marker turns green when verified
+                            child: Icon(Icons.location_on, color: _isQuestVerified ? Colors.green : Colors.red, size: 40),
                           ),
                         ],
                       ),
@@ -243,7 +320,8 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
               const SizedBox(height: 12),
 
               Card(
-                color: Colors.amber[50],
+                // NEW: Card turns green when verified
+                color: _isQuestVerified ? Colors.green[50] : Colors.amber[50],
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Column(
@@ -251,11 +329,35 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                     children: [
                       Text("Task: ${_analysisResult!['gamified_quest']['objective']}", style: const TextStyle(fontWeight: FontWeight.w500)),
                       const SizedBox(height: 4),
-                      Text("Reward Allocation: +${_analysisResult!['gamified_quest']['reward_points']} Points", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                      Text(
+                        _isQuestVerified ? "Status: Quest Completed Successfully ✓" : "Reward Allocation: +${_analysisResult!['gamified_quest']['reward_points']} Points", 
+                        style: TextStyle(fontWeight: FontWeight.bold, color: _isQuestVerified ? Colors.green[800] : Colors.green)
+                      ),
                     ],
                   ),
                 ),
               ),
+              
+              // NEW: The Verification Button!
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: (_isVerifyingQuest || _isQuestVerified) ? null : _simulateQuestVerification,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isQuestVerified ? Colors.grey : Colors.indigo[700],
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                icon: _isVerifyingQuest 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : Icon(_isQuestVerified ? Icons.check_circle : Icons.camera_alt),
+                label: Text(
+                  _isVerifyingQuest 
+                      ? "Analyzing Telemetry..." 
+                      : _isQuestVerified ? "Quest Objective Cleared" : "Verify Objective (Snap Photo)",
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+              const SizedBox(height: 24),
             ]
           ],
         ),

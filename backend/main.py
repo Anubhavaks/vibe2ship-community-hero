@@ -57,18 +57,24 @@ async def process_report(
         raise HTTPException(status_code=400, detail=f"Failed to process image file: {e}")
 
     # The prompt engineering that scores you "Agentic Depth" points
+    # The Advanced Prompt Engineering Block (Agentic Depth)
     prompt = f"""
-    You are CivicAgent, the autonomous urban infrastructure coordinator.
-    Analyze the uploaded image representing a citizen-reported infrastructure issue.
+    SYSTEM OVERRIDE: You are 'CivicAgent-Alpha', a Chief Municipal Civil Engineer and AI Crisis Assessor.
+    Your directive is to analyze this visual infrastructure report with ruthless engineering precision.
     
-    User Reported Location: {raw_location}
+    Raw Location Input: "{raw_location}"
     
-    Execute your evaluation pipeline:
-    1. Categorize the issue into standard civic domains.
-    2. Assess visual public safety hazards to score severity (1-10).
-    3. Generate clear public communication texts.
-    4. Predict infrastructure decay timelines if ignored.
-    5. Formulate a hyper-local citizen task (Quest) to verify this problem.
+    EXECUTE THE FOLLOWING PROTOCOLS:
+    1. Diagnostic Categorization: Classify the issue using strict civic engineering terminology (e.g., 'Hydraulic Grid Breach', 'Asphalt Sub-base Failure', 'High-Voltage Insulation Decay').
+    2. Severity Matrix (1-10): Assign a priority score based strictly on immediate public threat (e.g., electrocution risk, structural collapse, severe traffic disruption).
+    3. Public Tracker: Draft an official, transparent municipal alert title and rationale. Be concise and authoritative.
+    4. Predictive Deterioration: Provide a brutally realistic engineering forecast.
+       - timeline_48h: What happens to the materials or surrounding environment in the short term? (e.g., "Soil erosion beneath asphalt leading to cavitation.")
+       - timeline_7_days: What is the cascading municipal failure? (e.g., "Complete foundation sinkhole causing localized water main rupture.")
+    5. Gamified Verification Quest: 
+       - Estimate Latitude and Longitude based on the textual clue. If the exact location is unmappable, default to coordinates 28.98, 77.70 as the regional anchor.
+       - Set a tight, walkable foot-traffic radius (100 to 300 meters).
+       - Make the objective a highly specific, observable engineering check (e.g., "Verify if the base of the adjacent utility pole shows signs of waterlogging" or "Photograph the depth of the exposed rebar").
     """
 
     try:
