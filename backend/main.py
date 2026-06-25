@@ -18,9 +18,10 @@ class PublicTracker(BaseModel):
     title: str = Field(description="A brief, urgent title describing the civic issue.")
     rationale: str = Field(description="A concise explanation detailing why this is a safety or infrastructure risk.")
 
-class PredictiveInsight(BaseModel):
-    timeline_48h: str = Field(description="Deterioration forecast if left unattended for 48 hours.")
-    timeline_7_days: str = Field(description="Deterioration forecast if left unattended for 7 days.")
+# NEW: Replaced PredictiveInsight with ResolutionIntelligence
+class ResolutionIntelligence(BaseModel):
+    recommended_department: str = Field(description="Specific municipal department (e.g., Water Supply, Public Works, Traffic Control).")
+    risk_projection: list[str] = Field(description="A list of 2-3 severe, realistic cascading risks if ignored (e.g., 'Sub-base erosion', 'Vehicle damage').")
 
 class GamifiedQuest(BaseModel):
     quest_title: str = Field(description="An action-packed title for the citizen verification quest.")
@@ -34,7 +35,7 @@ class CivicAgentAnalysis(BaseModel):
     category: str = Field(description="Civic category (e.g., Potholes, Water Leakages, Damaged Streetlights, Waste Management).")
     severity_score: int = Field(description="A strict priority score from 1 (lowest) to 10 (highest hazard).")
     public_tracker: PublicTracker
-    predictive_insight: PredictiveInsight
+    resolution_intelligence: ResolutionIntelligence # <--- Updated field
     gamified_quest: GamifiedQuest
 
 
@@ -56,25 +57,22 @@ async def process_report(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to process image file: {e}")
 
-    # The prompt engineering that scores you "Agentic Depth" points
     # The Advanced Prompt Engineering Block (Agentic Depth)
     prompt = f"""
-    SYSTEM OVERRIDE: You are 'CivicAgent-Alpha', a Chief Municipal Civil Engineer and AI Crisis Assessor.
-    Your directive is to analyze this visual infrastructure report with ruthless engineering precision.
+    SYSTEM OVERRIDE: You are 'CivicAgent-Alpha', an autonomous municipal triage system and Chief Civil Engineer.
+    Analyze this visual infrastructure report with ruthless engineering precision.
     
     Raw Location Input: "{raw_location}"
     
-    EXECUTE THE FOLLOWING PROTOCOLS:
-    1. Diagnostic Categorization: Classify the issue using strict civic engineering terminology (e.g., 'Hydraulic Grid Breach', 'Asphalt Sub-base Failure', 'High-Voltage Insulation Decay').
-    2. Severity Matrix (1-10): Assign a priority score based strictly on immediate public threat (e.g., electrocution risk, structural collapse, severe traffic disruption).
+    EXECUTE PROTOCOLS:
+    1. Diagnostic Categorization: Classify the issue strictly (e.g., 'Hydraulic Grid Breach', 'Asphalt Sub-base Failure').
+    2. Severity Matrix (1-10): Assign a priority score based strictly on immediate public threat.
     3. Public Tracker: Draft an official, transparent municipal alert title and rationale. Be concise and authoritative.
-    4. Predictive Deterioration: Provide a brutally realistic engineering forecast.
-       - timeline_48h: What happens to the materials or surrounding environment in the short term? (e.g., "Soil erosion beneath asphalt leading to cavitation.")
-       - timeline_7_days: What is the cascading municipal failure? (e.g., "Complete foundation sinkhole causing localized water main rupture.")
+    4. Resolution Intelligence: Identify the EXACT responsible municipal department and project 2-3 severe, realistic cascading risks if left unresolved (e.g., "Road collapse risk", "Traffic gridlock").
     5. Gamified Verification Quest: 
        - Estimate Latitude and Longitude based on the textual clue. If the exact location is unmappable, default to coordinates 28.98, 77.70 as the regional anchor.
        - Set a tight, walkable foot-traffic radius (100 to 300 meters).
-       - Make the objective a highly specific, observable engineering check (e.g., "Verify if the base of the adjacent utility pole shows signs of waterlogging" or "Photograph the depth of the exposed rebar").
+       - Make the objective a highly specific, observable engineering check (e.g., "Verify if the base of the adjacent utility pole shows signs of waterlogging").
     """
 
     try:

@@ -323,6 +323,52 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
             const SizedBox(height: 4),
             Text(_analysisResult!['public_tracker']['rationale'] ?? "", style: TextStyle(color: Colors.grey[700], fontSize: 13)),
             const SizedBox(height: 16),
+            // --- NEW: RESOLUTION INTELLIGENCE CARD ---
+            Card(
+              color: Colors.red[50],
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+                side: BorderSide(color: Colors.red.shade200),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                        SizedBox(width: 8),
+                        Text("AI Resolution Intelligence", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 14)),
+                      ],
+                    ),
+                    const Divider(color: Colors.redAccent),
+                    Text(
+                      "Routing to: ${_analysisResult!['resolution_intelligence']['recommended_department']}",
+                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[900], fontSize: 15),
+                    ),
+                    const SizedBox(height: 8),
+                    Text("Projected Escalation Risks:", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red[900])),
+                    const SizedBox(height: 4),
+                    // Dynamically map through the list of risks
+                    ...(_analysisResult!['resolution_intelligence']['risk_projection'] as List).map((risk) => 
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4.0),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text("• ", style: TextStyle(color: Colors.red[800], fontWeight: FontWeight.bold)),
+                            Expanded(child: Text(risk.toString(), style: TextStyle(color: Colors.red[800], fontSize: 13))),
+                          ],
+                        ),
+                      )
+                    ).toList(),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            // -----------------------------------------
             Text("🗺️ ${_analysisResult!['gamified_quest']['quest_title']}", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.indigo)),
             const SizedBox(height: 8),
             Container(
