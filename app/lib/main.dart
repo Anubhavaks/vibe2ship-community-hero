@@ -425,20 +425,23 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                       userAgentPackageName: 'com.vibe2ship.communityhero',
                     ),
                     CircleLayer(
-                      circles: [
-                        CircleMarker(
-                          point: LatLng(
-                            _analysisResult!['analysis']['latitude'] ?? 28.9846,
-                            _analysisResult!['analysis']['longitude'] ?? 77.7059,
+                        circles: [
+                          CircleMarker(
+                            point: LatLng(
+                              _analysisResult!['analysis']['latitude'] ?? 28.9846,
+                              _analysisResult!['analysis']['longitude'] ?? 77.7059,
+                            ),
+                            color: _isQuestVerified ? Colors.green.withOpacity(0.15) : Colors.indigo.withOpacity(0.15),
+                            borderStrokeWidth: 2,
+                            borderColor: _isQuestVerified ? Colors.green : Colors.indigo,
+                            useRadiusInMeter: true,
+                            // 👇 FIX: Safely check if radius exists, otherwise default to 150.0 meters
+                            radius: _analysisResult!['analysis']['radius_meters'] != null 
+                                ? (_analysisResult!['analysis']['radius_meters'] as num).toDouble() 
+                                : 150.0,
                           ),
-                          color: _isQuestVerified ? Colors.green.withOpacity(0.15) : Colors.indigo.withOpacity(0.15),
-                          borderStrokeWidth: 2,
-                          borderColor: _isQuestVerified ? Colors.green : Colors.indigo,
-                          useRadiusInMeter: true,
-                          radius: (_analysisResult!['analysis']['radius_meters'] as num).toDouble(),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
                     MarkerLayer(
                       markers: [
                         Marker(
@@ -495,41 +498,125 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
     );
   }
 
+  // --- TAB 2: AUTHORITY DASHBOARD & LIFECYCLE TRACKER ---
   Widget _buildLiveTrackerTab() {
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: _simulatedFeed.length,
-      itemBuilder: (context, index) {
-        final item = _simulatedFeed[index];
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8),
-          elevation: 2,
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: Colors.teal[50],
-              child: Icon(item['icon'], color: Colors.teal[800]),
-            ),
-            title: Text(item['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      children: [
+        // 1. NEW: AUTHORITY DASHBOARD FILTERS
+        Container(
+          color: Colors.white,
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
               children: [
-                const SizedBox(height: 4),
-                Text("Domain: ${item['category']}", style: const TextStyle(fontSize: 12)),
-                const SizedBox(height: 2),
-                Text("Priority Level: ${item['severity']}/10", style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 11)),
+                FilterChip(
+                  label: const Text("All Issues", style: TextStyle(fontWeight: FontWeight.bold)),
+                  selected: true,
+                  onSelected: (bool value) {},
+                  selectedColor: Colors.teal[100],
+                  checkmarkColor: Colors.teal[900],
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text("🔴 Critical Severity"),
+                  selected: false,
+                  onSelected: (bool value) {},
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text("✓ Pending Verification"),
+                  selected: false,
+                  onSelected: (bool value) {},
+                ),
+                const SizedBox(width: 8),
+                FilterChip(
+                  label: const Text("🏛️ Filter by Dept"),
+                  selected: false,
+                  onSelected: (bool value) {},
+                ),
               ],
             ),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(color: item['color'].withOpacity(0.15), borderRadius: BorderRadius.circular(12)),
-              child: Text(
-                item['status'],
-                style: TextStyle(color: item['color'], fontWeight: FontWeight.bold, fontSize: 12),
-              ),
-            ),
           ),
-        );
-      },
+        ),
+        
+        // 2. THE ISSUES LIST WITH FULL LIFECYCLE PIPELINE
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: _simulatedFeed.length,
+            itemBuilder: (context, index) {
+              final item = _simulatedFeed[index];
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                elevation: 3,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: Padding(
+                  padding: const EdgeInsets.all(4.0),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.teal[50],
+                      child: Icon(item['icon'], color: Colors.teal[800]),
+                    ),
+                    title: Text(item['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 6),
+                        Text("Department: ${item['category']}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                        const SizedBox(height: 4),
+                        Text("Priority Level: ${item['severity']}/10", style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 11)),
+                        
+                        // NEW: VISUAL LIFECYCLE TRACKER
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            _buildLifecycleDot("Reported", true),
+                            _buildLifecycleLine(item['status'] == 'Verified' || item['status'] == 'In Progress' || item['status'] == 'Resolved'),
+                            _buildLifecycleDot("Verified", item['status'] == 'Verified' || item['status'] == 'In Progress' || item['status'] == 'Resolved'),
+                            _buildLifecycleLine(item['status'] == 'In Progress' || item['status'] == 'Resolved'),
+                            _buildLifecycleDot("Assigned", item['status'] == 'In Progress' || item['status'] == 'Resolved'),
+                            _buildLifecycleLine(item['status'] == 'Resolved'),
+                            _buildLifecycleDot("Resolved", item['status'] == 'Resolved'),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper widgets to draw the Lifecycle Pipeline
+  Widget _buildLifecycleDot(String label, bool isActive) {
+    return Column(
+      children: [
+        Icon(
+          isActive ? Icons.check_circle : Icons.radio_button_unchecked,
+          size: 16,
+          color: isActive ? Colors.teal : Colors.grey[400],
+        ),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 9, color: isActive ? Colors.teal[900] : Colors.grey[500], fontWeight: isActive ? FontWeight.bold : FontWeight.normal)),
+      ],
+    );
+  }
+
+  Widget _buildLifecycleLine(bool isActive) {
+    return Expanded(
+      child: Container(
+        height: 2,
+        color: isActive ? Colors.teal : Colors.grey[300],
+      ),
     );
   }
 

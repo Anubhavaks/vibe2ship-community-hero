@@ -9,8 +9,10 @@ from google.genai import types
 
 app = FastAPI(title="CivicHero AI - Live Core")
 
+# Initialize the official Google Gen AI client
 try:
-    client = genai.Client()
+    # Hardcode the key here just for your local testing/demo!
+    client = genai.Client(api_key="AQ.Ab8RN6IEsqa3qWzo_xkQLuaG6_E3WWK5Ej4Uf9pbwBo1TsuErA")
 except Exception as e:
     raise RuntimeError(f"Failed to initialize Gemini Client. Check your API key. Error: {e}")
 
@@ -59,6 +61,11 @@ class CivicAgentAnalysis(BaseModel):
 async def process_report(raw_location: str = Form(...), image: UploadFile = File(...)):
     image_bytes = await image.read()
 
+    # 1. We catch the bad mime type from Flutter
+    safe_mime_type = image.content_type
+    if not safe_mime_type or 'octet-stream' in safe_mime_type:
+        safe_mime_type = 'image/jpeg'  # Force to JPEG
+
     prompt = f"""
     You are CivicHero AI. Analyze this infrastructure report. Location: "{raw_location}"
     1. Categorize the issue and assign severity (1-10).
@@ -68,9 +75,14 @@ async def process_report(raw_location: str = Form(...), image: UploadFile = File
     5. Generate a localized verification quest with estimated coordinates.
     """
 
+    # 2. We pass safe_mime_type to Gemini
     response = client.models.generate_content(
         model='gemini-2.5-flash',
-        contents=[types.Part.from_bytes(data=image_bytes, mime_type=image.content_type), prompt],
+        contents=[
+            # 👇 LOOK HERE: This must say safe_mime_type, NOT image.content_type
+            types.Part.from_bytes(data=image_bytes, mime_type=safe_mime_type), 
+            prompt
+        ],
         config=types.GenerateContentConfig(
             response_mime_type="application/json",
             response_schema=CivicAgentAnalysis,
@@ -82,7 +94,6 @@ async def process_report(raw_location: str = Form(...), image: UploadFile = File
     new_lat = ai_data.get("latitude", 28.98)
     new_lng = ai_data.get("longitude", 77.70)
     new_category = ai_data.get("category", "")
-
     # ----------------------------------------------------
     # 🔥 REAL DUPLICATE DETECTION ENGINE
     # ----------------------------------------------------
@@ -90,22 +101,19 @@ async def process_report(raw_location: str = Form(...), image: UploadFile = File
     master_id = None
 
     for issue_id, issue_data in ISSUES_DB.items():
-        # Check 1: Is it the same type of issue?
         if issue_data['analysis']['category'] == new_category:
-            # Check 2: Is it within 100 meters?
             dist = calculate_distance(new_lat, new_lng, issue_data['analysis']['latitude'], issue_data['analysis']['longitude'])
             if dist <= 100:
                 is_duplicate = True
                 master_id = issue_id
-                break # We found our duplicate, stop searching
+                break 
 
-    # If it's NOT a duplicate, save it to our database
     issue_record_id = master_id if is_duplicate else f"CIVIC-{str(uuid.uuid4())[:8].upper()}"
     
     if not is_duplicate:
         ISSUES_DB[issue_record_id] = {
             "id": issue_record_id,
-            "status": "Reported", # Default status
+            "status": "Reported",
             "analysis": ai_data
         }
 
@@ -117,7 +125,6 @@ async def process_report(raw_location: str = Form(...), image: UploadFile = File
             "master_issue": master_id
         }
     }
-
 @app.post("/api/v1/verify/{issue_id}")
 async def verify_issue(issue_id: str):
     """Real endpoint to update an issue's status when a citizen verifies it."""
