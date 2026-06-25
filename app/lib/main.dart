@@ -100,17 +100,17 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
       _isAnalyzing = false;
     });
 
-    if (result != null && result['gamified_quest'] != null) {
-      double lat = result['gamified_quest']['latitude'] ?? 28.9846;
-      double lng = result['gamified_quest']['longitude'] ?? 77.7059;
+    if (result != null && result['analysis'] != null) {
+      double lat = result['analysis']['latitude'] ?? 28.9846;
+      double lng = result['analysis']['longitude'] ?? 77.7059;
       _mapController.move(LatLng(lat, lng), 15.5);
       
       // Inject newly generated AI telemetry automatically into the Tracking Feed layer
       _simulatedFeed.insert(0, {
-        "id": "CIVIC-2026-894A",
-        "title": result['public_tracker']['title'] ?? "Active Local Incident",
-        "category": result['category'] ?? "Civic Hazard",
-        "severity": result['severity_score'] ?? 5,
+        "id": result['issue_id'] ?? "CIVIC-894A",
+        "title": result['analysis']['explanation'] ?? "Active Local Incident",
+        "category": result['analysis']['category'] ?? "Civic Hazard",
+        "severity": result['analysis']['severity'] ?? 5,
         "status": "Reported",
         "icon": Icons.analytics,
         "color": Colors.orange
@@ -122,11 +122,13 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
     final pickedFile = await _picker.pickImage(source: ImageSource.camera);
     if (pickedFile != null) {
       setState(() => _isVerifyingQuest = true);
-      await Future.delayed(const Duration(seconds: 2));
+      
+      String currentId = _analysisResult!['issue_id'] ?? "";
+      await _apiService.verifyIssueViaQuest(currentId);
+      
       setState(() {
         _isQuestVerified = true;
         _isVerifyingQuest = false;
-        // Dynamically shift the tracking status from Reported to Community Verified!
         if (_simulatedFeed.isNotEmpty) {
           _simulatedFeed[0]["status"] = "Verified";
           _simulatedFeed[0]["color"] = Colors.blue;
@@ -163,7 +165,7 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text("Wallet Credit Issued:", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.green[900])),
-                    Text("+${_analysisResult!['gamified_quest']['reward_points']} PTS", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
+                    Text("+${_analysisResult!['analysis']['reward_points'] ?? 150} PTS", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 16)),
                   ],
                 ),
               ),
@@ -183,10 +185,10 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3, // 3 Views: Reporting Hub, Public Tracker, Impact Dashboards
+      length: 3, 
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('🛡️ CivicAgent Core Grid'),
+          title: const Text('🛡️ CivicHero AI Core'),
           backgroundColor: Colors.teal[700],
           foregroundColor: Colors.white,
           bottom: const TabBar(
@@ -211,7 +213,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
     );
   }
 
-  // --- TAB 1: FULL MULTIMODAL REPORT HUB + GEOFENCING ---
   Widget _buildReportHubTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
@@ -300,88 +301,121 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
           ),
           if (_analysisResult != null) ...[
             const SizedBox(height: 20),
-            const Divider(thickness: 2),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Chip(
-                  label: Text(_analysisResult!['category'] ?? "Civic Hazard"),
-                  backgroundColor: Colors.teal[50],
+            
+            if (_analysisResult!['duplicate_detection']['is_duplicate'] == true)
+              Container(
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.amber[50], 
+                  border: Border.all(color: Colors.amber.shade700), 
+                  borderRadius: BorderRadius.circular(8)
                 ),
-                Text(
-                  "Severity: ${_analysisResult!['severity_score']}/10",
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: (_analysisResult!['severity_score'] ?? 5) >= 7 ? Colors.red[700] : Colors.orange[700],
-                  ),
-                )
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(_analysisResult!['public_tracker']['title'] ?? "", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            Text(_analysisResult!['public_tracker']['rationale'] ?? "", style: TextStyle(color: Colors.grey[700], fontSize: 13)),
-            const SizedBox(height: 16),
-            // --- NEW: RESOLUTION INTELLIGENCE CARD ---
-            Card(
-              color: Colors.red[50],
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.red.shade200),
+                child: Row(
+                  children: [
+                    Icon(Icons.layers, color: Colors.amber[800]),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        "Duplicate Alert: This issue matches an active case within 100m. Merged into Master Track ID: ${_analysisResult!['duplicate_detection']['master_issue']}",
+                        style: TextStyle(color: Colors.amber[900], fontWeight: FontWeight.bold, fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
               ),
+
+            Card(
+              elevation: 3,
               child: Padding(
-                padding: const EdgeInsets.all(12.0),
+                padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
-                        SizedBox(width: 8),
-                        Text("AI Resolution Intelligence", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red, fontSize: 14)),
+                        Expanded(
+                          child: Text(
+                            _analysisResult!['analysis']['category'], 
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: (_analysisResult!['analysis']['severity'] >= 7) ? Colors.red : Colors.orange, 
+                            borderRadius: BorderRadius.circular(12)
+                          ),
+                          child: Text(
+                            "Severity: ${_analysisResult!['analysis']['severity']}/10", 
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)
+                          ),
+                        )
                       ],
                     ),
-                    const Divider(color: Colors.redAccent),
-                    Text(
-                      "Routing to: ${_analysisResult!['resolution_intelligence']['recommended_department']}",
-                      style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red[900], fontSize: 15),
-                    ),
-                    const SizedBox(height: 8),
-                    Text("Projected Escalation Risks:", style: TextStyle(fontWeight: FontWeight.w600, color: Colors.red[900])),
-                    const SizedBox(height: 4),
-                    // Dynamically map through the list of risks
-                    ...(_analysisResult!['resolution_intelligence']['risk_projection'] as List).map((risk) => 
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 4.0),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text("• ", style: TextStyle(color: Colors.red[800], fontWeight: FontWeight.bold)),
-                            Expanded(child: Text(risk.toString(), style: TextStyle(color: Colors.red[800], fontSize: 13))),
-                          ],
+                    const Divider(height: 24),
+                    
+                    Text("Assigned Department:", style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                    const SizedBox(height: 2),
+                    Text("🏛️ ${_analysisResult!['analysis']['department']}", style: TextStyle(color: Colors.teal[900], fontSize: 15, fontWeight: FontWeight.bold)),
+                    
+                    const SizedBox(height: 16),
+                    Text("AI Diagnostic Confidence:", style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: _analysisResult!['analysis']['confidence'] / 100,
+                              backgroundColor: Colors.grey[200],
+                              color: Colors.teal[600],
+                              minHeight: 8,
+                            ),
+                          ),
                         ),
-                      )
-                    ).toList(),
+                        const SizedBox(width: 12),
+                        Text("${_analysisResult!['analysis']['confidence']}%", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 16),
+                    Text("Risk Summary:", style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                    const SizedBox(height: 2),
+                    Text(_analysisResult!['analysis']['risk_summary'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                    
+                    const SizedBox(height: 8),
+                    Text("Explanation:", style: TextStyle(color: Colors.grey[600], fontSize: 11)),
+                    const SizedBox(height: 2),
+                    Text(_analysisResult!['analysis']['explanation'], style: TextStyle(color: Colors.grey[800], fontSize: 13, height: 1.3)),
                   ],
                 ),
               ),
             ),
             const SizedBox(height: 16),
-            // -----------------------------------------
-            Text("🗺️ ${_analysisResult!['gamified_quest']['quest_title']}", style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.indigo)),
+
+            Text(
+              "🗺️ ${_analysisResult!['analysis']['quest_title']}",
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.indigo),
+            ),
             const SizedBox(height: 8),
             Container(
-              height: 200,
-              decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.indigo[100]!)),
+              height: 220,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.indigo.shade100),
+              ),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(11),
                 child: FlutterMap(
                   mapController: _mapController,
                   options: MapOptions(
                     initialCenter: LatLng(
-                      _analysisResult!['gamified_quest']['latitude'] ?? 28.9846,
-                      _analysisResult!['gamified_quest']['longitude'] ?? 77.7059,
+                      _analysisResult!['analysis']['latitude'] ?? 28.9846,
+                      _analysisResult!['analysis']['longitude'] ?? 77.7059,
                     ),
                     initialZoom: 15.0,
                   ),
@@ -394,14 +428,14 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                       circles: [
                         CircleMarker(
                           point: LatLng(
-                            _analysisResult!['gamified_quest']['latitude'] ?? 28.9846,
-                            _analysisResult!['gamified_quest']['longitude'] ?? 77.7059,
+                            _analysisResult!['analysis']['latitude'] ?? 28.9846,
+                            _analysisResult!['analysis']['longitude'] ?? 77.7059,
                           ),
-                          color: _isQuestVerified ? Colors.green.withOpacity(0.2) : Colors.indigo.withOpacity(0.2),
+                          color: _isQuestVerified ? Colors.green.withOpacity(0.15) : Colors.indigo.withOpacity(0.15),
                           borderStrokeWidth: 2,
                           borderColor: _isQuestVerified ? Colors.green : Colors.indigo,
                           useRadiusInMeter: true,
-                          radius: (_analysisResult!['gamified_quest']['radius_meters'] as num).toDouble(),
+                          radius: (_analysisResult!['analysis']['radius_meters'] as num).toDouble(),
                         ),
                       ],
                     ),
@@ -409,8 +443,8 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                       markers: [
                         Marker(
                           point: LatLng(
-                            _analysisResult!['gamified_quest']['latitude'] ?? 28.9846,
-                            _analysisResult!['gamified_quest']['longitude'] ?? 77.7059,
+                            _analysisResult!['analysis']['latitude'] ?? 28.9846,
+                            _analysisResult!['analysis']['longitude'] ?? 77.7059,
                           ),
                           width: 40,
                           height: 40,
@@ -423,6 +457,7 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
               ),
             ),
             const SizedBox(height: 12),
+
             Card(
               color: _isQuestVerified ? Colors.green[50] : Colors.amber[50],
               child: Padding(
@@ -430,9 +465,12 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("Task: ${_analysisResult!['gamified_quest']['objective']}", style: const TextStyle(fontWeight: FontWeight.w500)),
+                    Text("Task: ${_analysisResult!['analysis']['quest_objective']}", style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13)),
                     const SizedBox(height: 4),
-                    Text(_isQuestVerified ? "Status: Quest Completed Successfully ✓" : "Reward Allocation: +${_analysisResult!['gamified_quest']['reward_points']} Points", style: TextStyle(fontWeight: FontWeight.bold, color: _isQuestVerified ? Colors.green[800] : Colors.green)),
+                    Text(
+                      _isQuestVerified ? "Status: Verified & Tracked ✓" : "Reward Allocation: +50 Points", 
+                      style: TextStyle(fontWeight: FontWeight.bold, color: _isQuestVerified ? Colors.green[800] : Colors.green, fontSize: 13)
+                    ),
                   ],
                 ),
               ),
@@ -440,17 +478,23 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
             const SizedBox(height: 12),
             ElevatedButton.icon(
               onPressed: (_isVerifyingQuest || _isQuestVerified) ? null : _simulateQuestVerification,
-              style: ElevatedButton.styleFrom(backgroundColor: _isQuestVerified ? Colors.grey : Colors.indigo[700], foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14)),
-              icon: _isVerifyingQuest ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Icon(_isQuestVerified ? Icons.check_circle : Icons.camera_alt),
-              label: Text(_isVerifyingQuest ? "Analyzing Telemetry..." : _isQuestVerified ? "Quest Objective Cleared" : "Verify Objective (Snap Photo)"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _isQuestVerified ? Colors.grey : Colors.indigo[700], 
+                foregroundColor: Colors.white, 
+                padding: const EdgeInsets.symmetric(vertical: 14)
+              ),
+              icon: _isVerifyingQuest 
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
+                  : Icon(_isQuestVerified ? Icons.check_circle : Icons.camera_alt),
+              label: Text(_isVerifyingQuest ? "Updating Transaction..." : _isQuestVerified ? "Quest Objective Cleared" : "Verify Objective (Snap Photo)"),
             ),
+            const SizedBox(height: 24),
           ]
         ],
       ),
     );
   }
 
-  // --- TAB 2: REAL-TIME ISSUE TRACKING DASHBOARD ---
   Widget _buildLiveTrackerTab() {
     return ListView.builder(
       padding: const EdgeInsets.all(16),
@@ -489,7 +533,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
     );
   }
 
-  // --- TAB 3: PLATFORM IMPACT DASHBOARD & LEADERBOARD ---
   Widget _buildImpactDashboardTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
@@ -500,9 +543,9 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _buildMetricCard("412", "Total Incidents logged", Icons.analytics, Colors.blue)),
+              Expanded(child: _buildMetricCard("${_simulatedFeed.length + 140}", "Total Incidents logged", Icons.analytics, Colors.blue)),
               const SizedBox(width: 12),
-              Expanded(child: _buildMetricCard("1,840", "Quests Completed", Icons.stars, Colors.amber)),
+              Expanded(child: _buildMetricCard("1,842", "Quests Completed", Icons.stars, Colors.amber)),
             ],
           ),
           const SizedBox(height: 12),
@@ -535,7 +578,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
             const SizedBox(height: 8),
             Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
-            // Corrected textAlign: TextAlign.center
             Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
           ],
         ),
