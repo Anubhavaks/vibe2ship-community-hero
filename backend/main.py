@@ -129,21 +129,67 @@ async def process_report(raw_location: str = Form(...), image: UploadFile = File
 async def verify_issue(issue_id: str):
     """Real endpoint to update an issue's status when a citizen verifies it."""
     if issue_id in ISSUES_DB:
-        ISSUES_DB[issue_id]["status"] = "Verified"
+        ISSUES_DB[issue_id]["status"] = "Resolved"
         return {"status": "success", "message": f"Issue {issue_id} verified successfully."}
     raise HTTPException(status_code=404, detail="Issue not found")
+@app.post("/api/v1/assign/{issue_id}")
+async def assign_issue(issue_id: str):
+
+    if issue_id not in ISSUES_DB:
+        raise HTTPException(404)
+
+    ISSUES_DB[issue_id]["status"] = "Assigned"
+
+    return {"success": True}
+@app.post("/api/v1/resolve/{issue_id}")
+async def resolve_issue(issue_id: str):
+
+    if issue_id not in ISSUES_DB:
+        raise HTTPException(404)
+
+    ISSUES_DB[issue_id]["status"] = "Resolved"
+
+    return {"success": True}
 
 @app.get("/api/v1/dashboard")
 async def get_dashboard_stats():
-    """Real endpoint to calculate active database statistics."""
+
     total = len(ISSUES_DB)
-    critical = sum(1 for issue in ISSUES_DB.values() if issue['analysis']['severity'] >= 8)
-    verified = sum(1 for issue in ISSUES_DB.values() if issue['status'] == "Verified")
-    
-    # Send real data to the Flutter Dashboard Tab
+
+    reported = sum(
+        1 for issue in ISSUES_DB.values()
+        if issue["status"] == "Reported"
+    )
+
+    verified = sum(
+        1 for issue in ISSUES_DB.values()
+        if issue["status"] == "Verified"
+    )
+
+    assigned = sum(
+        1 for issue in ISSUES_DB.values()
+        if issue["status"] == "Assigned"
+    )
+
+    resolved = sum(
+        1 for issue in ISSUES_DB.values()
+        if issue["status"] == "Resolved"
+    )
+
+    critical = sum(
+        1
+        for issue in ISSUES_DB.values()
+        if issue["analysis"]["severity"] >= 8
+    )
+
     return {
-        "total_issues": total,
-        "critical_issues": critical,
-        "verified_issues": verified,
-        "feed": list(ISSUES_DB.values()) # Sends the list of real issues for the tracker tab
+        "summary": {
+            "total": total,
+            "reported": reported,
+            "verified": verified,
+            "assigned": assigned,
+            "resolved": resolved,
+            "critical": critical,
+        },
+        "feed": list(ISSUES_DB.values())
     }

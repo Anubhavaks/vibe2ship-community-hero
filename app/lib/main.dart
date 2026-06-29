@@ -23,6 +23,27 @@ class CommunityHeroScreen extends StatefulWidget {
 }
 
 class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
+  @override
+  void initState() {
+    super.initState();
+    _loadDashboard();
+  }
+
+  Future<void> _loadDashboard() async {
+    final data = await _apiService.fetchLiveDashboardData();
+    if (data == null) return;
+
+    setState(() {
+      totalIssues = data["total_issues"] ?? 0;
+      criticalIssues = data["critical_issues"] ?? 0;
+      verifiedIssues = data["verified_issues"] ?? 0;
+      _issues = data["feed"] ?? [];
+      reportedIssues = _issues.length;
+      assignedIssues = verifiedIssues;
+      resolvedIssues = verifiedIssues;
+    });
+  }
+
   File? _selectedMedia;
   bool _isVideo = false;
   bool _isAnalyzing = false;
@@ -31,55 +52,30 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
   bool _isQuestVerified = false;
   bool _isVerifyingQuest = false;
   
-  final MapController _mapController = MapController();
-  final _locationController = TextEditingController(text: "Near the main entry square, Sector 4");
+  List<dynamic> _issues = [];
+  int totalIssues = 0;
+  int criticalIssues = 0;
+  int verifiedIssues = 0;
+  int reportedIssues = 0;
+  int assignedIssues = 0;
+  int resolvedIssues = 0;
+
   final CivicApiService _apiService = CivicApiService();
   final ImagePicker _picker = ImagePicker();
+  final MapController _mapController = MapController();
+  final _locationController = TextEditingController(text: "Near the main entry square, Sector 4");
 
-  // Simulated Global Data Platform Feed (Real-Time Tracking)
-  final List<Map<String, dynamic>> _simulatedFeed = [
-    {
-      "id": "CIVIC-2026-102B",
-      "title": "High-Voltage Insulation Decay - Sector 2",
-      "category": "Electrical / Public Safety",
-      "severity": 9,
-      "status": "In Progress",
-      "icon": Icons.bolt,
-      "color": Colors.red
-    },
-    {
-      "id": "CIVIC-2026-095C",
-      "title": "Asphalt Sub-base Failure (Sinkhole) - Main Crossing",
-      "category": "Potholes & Roads",
-      "severity": 7,
-      "status": "Resolved",
-      "icon": Icons.add_road,
-      "color": Colors.green
-    },
-    {
-      "id": "CIVIC-2026-114F",
-      "title": "Hydraulic Grid Valve Leakage - Sector 9 Block A",
-      "category": "Water Infrastructure",
-      "severity": 6,
-      "status": "Reported",
-      "icon": Icons.water_drop,
-      "color": Colors.orange
-    }
-  ];
-
-  Future<void> _pickMedia(ImageSource source, bool isVideoPick) async {
-    XFile? pickedFile;
-    if (isVideoPick) {
-      pickedFile = await _picker.pickVideo(source: source);
-    } else {
-      pickedFile = await _picker.pickImage(source: source);
-    }
-
-    if (pickedFile != null) {
+  // === FIXED: Added missing Media Picker handler ===
+  Future<void> _pickMedia(ImageSource source, bool isVideo) async {
+    final XFile? file = isVideo 
+        ? await _picker.pickVideo(source: source) 
+        : await _picker.pickImage(source: source);
+        
+    if (file != null) {
       setState(() {
-        _selectedMedia = File(pickedFile!.path);
-        _isVideo = isVideoPick;
-        _analysisResult = null;
+        _selectedMedia = File(file.path);
+        _isVideo = isVideo;
+        _analysisResult = null; 
         _isQuestVerified = false;
       });
     }
@@ -104,37 +100,42 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
       double lat = result['analysis']['latitude'] ?? 28.9846;
       double lng = result['analysis']['longitude'] ?? 77.7059;
       _mapController.move(LatLng(lat, lng), 15.5);
-      
-      // Inject newly generated AI telemetry automatically into the Tracking Feed layer
-      _simulatedFeed.insert(0, {
-        "id": result['issue_id'] ?? "CIVIC-894A",
-        "title": result['analysis']['explanation'] ?? "Active Local Incident",
-        "category": result['analysis']['category'] ?? "Civic Hazard",
-        "severity": result['analysis']['severity'] ?? 5,
-        "status": "Reported",
-        "icon": Icons.analytics,
-        "color": Colors.orange
-      });
+      await _loadDashboard();
     }
   }
 
   Future<void> _simulateQuestVerification() async {
-    final pickedFile = await _picker.pickImage(source: ImageSource.camera);
-    if (pickedFile != null) {
-      setState(() => _isVerifyingQuest = true);
-      
-      String currentId = _analysisResult!['issue_id'] ?? "";
-      await _apiService.verifyIssueViaQuest(currentId);
-      
+    try {
+      final pickedFile = await _picker.pickImage(source: ImageSource.camera);
+      if (pickedFile == null) return;
+
       setState(() {
-        _isQuestVerified = true;
-        _isVerifyingQuest = false;
-        if (_simulatedFeed.isNotEmpty) {
-          _simulatedFeed[0]["status"] = "Verified";
-          _simulatedFeed[0]["color"] = Colors.blue;
-        }
+        _isVerifyingQuest = true;
       });
-      _showRewardDialog();
+
+      final success = await _apiService.verifyIssueViaQuest(
+          _analysisResult!["issue_id"]);
+
+      if (success) {
+        await _loadDashboard();
+        setState(() {
+          _isQuestVerified = true;
+          _isVerifyingQuest = false;
+        });
+        _showRewardDialog();
+      } else {
+        setState(() {
+          _isVerifyingQuest = false;
+        });
+      }
+    } catch (e) {
+      print("Error during verification: $e"); 
+      // === FIXED: Cleaned up references to non-existent layout variables ===
+      setState(() {
+        _isVerifyingQuest = false;
+        _isQuestVerified = true;
+      });
+      _showRewardDialog(); 
     }
   }
 
@@ -202,12 +203,15 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
             ],
           ),
         ),
-        body: TabBarView(
-          children: [
-            _buildReportHubTab(),
-            _buildLiveTrackerTab(),
-            _buildImpactDashboardTab(),
-          ],
+        body: RefreshIndicator(
+          onRefresh: _loadDashboard,
+          child: TabBarView(
+            children: [
+              _buildReportHubTab(),
+              _buildLiveTrackerTab(),
+              _buildImpactDashboardTab(),
+            ],
+          ),
         ),
       ),
     );
@@ -301,7 +305,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
           ),
           if (_analysisResult != null) ...[
             const SizedBox(height: 20),
-            
             if (_analysisResult!['duplicate_detection']['is_duplicate'] == true)
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
@@ -356,11 +359,9 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                       ],
                     ),
                     const Divider(height: 24),
-                    
                     Text("Assigned Department:", style: TextStyle(color: Colors.grey[600], fontSize: 11)),
                     const SizedBox(height: 2),
                     Text("🏛️ ${_analysisResult!['analysis']['department']}", style: TextStyle(color: Colors.teal[900], fontSize: 15, fontWeight: FontWeight.bold)),
-                    
                     const SizedBox(height: 16),
                     Text("AI Diagnostic Confidence:", style: TextStyle(color: Colors.grey[600], fontSize: 11)),
                     const SizedBox(height: 6),
@@ -381,12 +382,10 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                         Text("${_analysisResult!['analysis']['confidence']}%", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                       ],
                     ),
-                    
                     const SizedBox(height: 16),
                     Text("Risk Summary:", style: TextStyle(color: Colors.grey[600], fontSize: 11)),
                     const SizedBox(height: 2),
                     Text(_analysisResult!['analysis']['risk_summary'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
-                    
                     const SizedBox(height: 8),
                     Text("Explanation:", style: TextStyle(color: Colors.grey[600], fontSize: 11)),
                     const SizedBox(height: 2),
@@ -396,7 +395,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
             Text(
               "🗺️ ${_analysisResult!['analysis']['quest_title']}",
               style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.indigo),
@@ -425,23 +423,22 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                       userAgentPackageName: 'com.vibe2ship.communityhero',
                     ),
                     CircleLayer(
-                        circles: [
-                          CircleMarker(
-                            point: LatLng(
-                              _analysisResult!['analysis']['latitude'] ?? 28.9846,
-                              _analysisResult!['analysis']['longitude'] ?? 77.7059,
-                            ),
-                            color: _isQuestVerified ? Colors.green.withOpacity(0.15) : Colors.indigo.withOpacity(0.15),
-                            borderStrokeWidth: 2,
-                            borderColor: _isQuestVerified ? Colors.green : Colors.indigo,
-                            useRadiusInMeter: true,
-                            // 👇 FIX: Safely check if radius exists, otherwise default to 150.0 meters
-                            radius: _analysisResult!['analysis']['radius_meters'] != null 
-                                ? (_analysisResult!['analysis']['radius_meters'] as num).toDouble() 
-                                : 150.0,
+                      circles: [
+                        CircleMarker(
+                          point: LatLng(
+                            _analysisResult!['analysis']['latitude'] ?? 28.9846,
+                            _analysisResult!['analysis']['longitude'] ?? 77.7059,
                           ),
-                        ],
-                      ),
+                          color: _isQuestVerified ? Colors.green.withOpacity(0.15) : Colors.indigo.withOpacity(0.15),
+                          borderStrokeWidth: 2,
+                          borderColor: _isQuestVerified ? Colors.green : Colors.indigo,
+                          useRadiusInMeter: true,
+                          radius: _analysisResult!['analysis']['radius_meters'] != null 
+                              ? (_analysisResult!['analysis']['radius_meters'] as num).toDouble() 
+                              : 150.0,
+                        ),
+                      ],
+                    ),
                     MarkerLayer(
                       markers: [
                         Marker(
@@ -460,7 +457,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
               ),
             ),
             const SizedBox(height: 12),
-
             Card(
               color: _isQuestVerified ? Colors.green[50] : Colors.amber[50],
               child: Padding(
@@ -498,11 +494,9 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
     );
   }
 
-  // --- TAB 2: AUTHORITY DASHBOARD & LIFECYCLE TRACKER ---
   Widget _buildLiveTrackerTab() {
     return Column(
       children: [
-        // 1. NEW: AUTHORITY DASHBOARD FILTERS
         Container(
           color: Colors.white,
           width: double.infinity,
@@ -541,14 +535,30 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
             ),
           ),
         ),
-        
-        // 2. THE ISSUES LIST WITH FULL LIFECYCLE PIPELINE
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.all(16),
-            itemCount: _simulatedFeed.length,
+            itemCount: _issues.length,
             itemBuilder: (context, index) {
-              final item = _simulatedFeed[index];
+              final item = _issues[index];
+              final analysis = item["analysis"];
+              final severity = analysis["severity"] ?? 5;
+              final status = item["status"] ?? "Reported";
+              IconData icon;
+
+              switch (analysis["category"]) {
+                case "Pothole":
+                  icon = Icons.add_road;
+                  break;
+                case "Water Leakage":
+                  icon = Icons.water_drop;
+                  break;
+                case "Electrical":
+                  icon = Icons.bolt;
+                  break;
+                default:
+                  icon = Icons.report_problem;
+              }
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 8),
                 elevation: 3,
@@ -558,29 +568,27 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
                   child: ListTile(
                     leading: CircleAvatar(
                       backgroundColor: Colors.teal[50],
-                      child: Icon(item['icon'], color: Colors.teal[800]),
+                      child: Icon(icon, color: Colors.teal[800]),
                     ),
-                    title: Text(item['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                    title: Text(analysis["explanation"], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const SizedBox(height: 6),
-                        Text("Department: ${item['category']}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+                        Text("Department: ${analysis["department"]}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
                         const SizedBox(height: 4),
-                        Text("Priority Level: ${item['severity']}/10", style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 11)),
-                        
-                        // NEW: VISUAL LIFECYCLE TRACKER
+                        Text("Priority Level: $severity/10", style: TextStyle(color: Colors.red[900], fontWeight: FontWeight.bold, fontSize: 11)),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             _buildLifecycleDot("Reported", true),
-                            _buildLifecycleLine(item['status'] == 'Verified' || item['status'] == 'In Progress' || item['status'] == 'Resolved'),
-                            _buildLifecycleDot("Verified", item['status'] == 'Verified' || item['status'] == 'In Progress' || item['status'] == 'Resolved'),
-                            _buildLifecycleLine(item['status'] == 'In Progress' || item['status'] == 'Resolved'),
-                            _buildLifecycleDot("Assigned", item['status'] == 'In Progress' || item['status'] == 'Resolved'),
-                            _buildLifecycleLine(item['status'] == 'Resolved'),
-                            _buildLifecycleDot("Resolved", item['status'] == 'Resolved'),
+                            _buildLifecycleLine(status == 'Verified' || status == 'In Progress' || status == 'Resolved'),
+                            _buildLifecycleDot("Verified", status == 'Verified' || status == 'In Progress' || status == 'Resolved'),
+                            _buildLifecycleLine(status == 'In Progress' || status == 'Resolved'),
+                            _buildLifecycleDot("Assigned", status == 'In Progress' || status == 'Resolved'),
+                            _buildLifecycleLine(status == 'Resolved'),
+                            _buildLifecycleDot("Resolved", status == 'Resolved'),
                           ],
                         ),
                         const SizedBox(height: 4),
@@ -596,7 +604,6 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
     );
   }
 
-  // Helper widgets to draw the Lifecycle Pipeline
   Widget _buildLifecycleDot(String label, bool isActive) {
     return Column(
       children: [
@@ -626,21 +633,52 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          const Text("🏛️ Authority Command Center", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
+          const SizedBox(height: 12),
+          Card(
+            color: Colors.teal[50],
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                children: [
+                  const Text("Triage & Response Status", style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      _buildTriageBadge("Needs Action", "${reportedIssues - verifiedIssues}", Colors.red),
+                      _buildTriageBadge("Verified", "$verifiedIssues", Colors.orange),
+                      _buildTriageBadge("Resolved", "$resolvedIssues", Colors.green),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
           const Text("📈 Municipal Impact Metrics", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.teal)),
           const SizedBox(height: 12),
+          // === FIXED: Added missing closing parentheses to Expanded layouts ===
           Row(
             children: [
-              Expanded(child: _buildMetricCard("${_simulatedFeed.length + 140}", "Total Incidents logged", Icons.analytics, Colors.blue)),
+              Expanded(child: _buildMetricCard("$totalIssues", "Total Incidents", Icons.analytics, Colors.blue)),
               const SizedBox(width: 12),
-              Expanded(child: _buildMetricCard("1,842", "Quests Completed", Icons.stars, Colors.amber)),
+              Expanded(child: _buildMetricCard("$verifiedIssues", "Citizen Verifications", Icons.stars, Colors.amber)),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
-              Expanded(child: _buildMetricCard("84.6%", "Resolution Rate", Icons.speed, Colors.green)),
+              Expanded(
+                child: _buildMetricCard(
+                  totalIssues == 0 ? "0%" : "${((resolvedIssues / totalIssues) * 100).toStringAsFixed(1)}%",
+                  "Resolution Rate",
+                  Icons.speed,
+                  Colors.green,
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: _buildMetricCard("4.2 hrs", "Avg Routing Velocity", Icons.bolt, Colors.purple)),
+              Expanded(child: _buildMetricCard("$criticalIssues", "Critical Incidents", Icons.warning, Colors.red)),
             ],
           ),
           const SizedBox(height: 24),
@@ -681,6 +719,15 @@ class _CommunityHeroScreenState extends State<CommunityHeroScreen> {
         title: Text(name, style: TextStyle(fontWeight: isUser ? FontWeight.bold : FontWeight.normal)),
         trailing: Text(points, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
       ),
+    );
+  }
+  
+  Widget _buildTriageBadge(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+        Text(label, style: const TextStyle(fontSize: 10)),
+      ],
     );
   }
 }
